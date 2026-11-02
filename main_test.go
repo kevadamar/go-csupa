@@ -14,6 +14,7 @@ func TestLoadConfig(t *testing.T) {
 	origURL := os.Getenv("SUPABASE_URL")
 	origKey := os.Getenv("SUPABASE_ANON_KEY")
 	origTable := os.Getenv("SUPABASE_TABLE")
+	origSchema := os.Getenv("SUPABASE_SCHEMA")
 	origInterval := os.Getenv("KEEP_ALIVE_INTERVAL")
 	origTimeout := os.Getenv("HTTP_TIMEOUT")
 
@@ -21,6 +22,7 @@ func TestLoadConfig(t *testing.T) {
 		os.Setenv("SUPABASE_URL", origURL)
 		os.Setenv("SUPABASE_ANON_KEY", origKey)
 		os.Setenv("SUPABASE_TABLE", origTable)
+		os.Setenv("SUPABASE_SCHEMA", origSchema)
 		os.Setenv("KEEP_ALIVE_INTERVAL", origInterval)
 		os.Setenv("HTTP_TIMEOUT", origTimeout)
 	}()
@@ -62,6 +64,7 @@ func TestLoadConfig(t *testing.T) {
 		os.Setenv("SUPABASE_URL", "https://xyz.supabase.co/")
 		os.Setenv("SUPABASE_ANON_KEY", "secret-anon-key")
 		os.Setenv("SUPABASE_TABLE", "profiles")
+		os.Unsetenv("SUPABASE_SCHEMA")
 		os.Unsetenv("KEEP_ALIVE_INTERVAL")
 		os.Unsetenv("HTTP_TIMEOUT")
 
@@ -79,11 +82,52 @@ func TestLoadConfig(t *testing.T) {
 		if cfg.Table != "profiles" {
 			t.Errorf("expected profiles, got: %s", cfg.Table)
 		}
+		if cfg.Schema != "" {
+			t.Errorf("expected empty schema by default, got: %s", cfg.Schema)
+		}
 		if cfg.Interval != 72*time.Hour {
 			t.Errorf("expected default interval 72h, got: %v", cfg.Interval)
 		}
 		if cfg.Timeout != 30*time.Second {
 			t.Errorf("expected default timeout 30s, got: %v", cfg.Timeout)
+		}
+	})
+
+	t.Run("Auto Split Schema from SUPABASE_TABLE", func(t *testing.T) {
+		os.Setenv("SUPABASE_URL", "https://xyz.supabase.co")
+		os.Setenv("SUPABASE_ANON_KEY", "secret-anon-key")
+		os.Setenv("SUPABASE_TABLE", "memfinance.user_profiles")
+		os.Unsetenv("SUPABASE_SCHEMA")
+
+		cfg, err := loadConfig()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if cfg.Schema != "memfinance" {
+			t.Errorf("expected schema 'memfinance', got: %s", cfg.Schema)
+		}
+		if cfg.Table != "user_profiles" {
+			t.Errorf("expected table 'user_profiles', got: %s", cfg.Table)
+		}
+	})
+
+	t.Run("Explicit SUPABASE_SCHEMA", func(t *testing.T) {
+		os.Setenv("SUPABASE_URL", "https://xyz.supabase.co")
+		os.Setenv("SUPABASE_ANON_KEY", "secret-anon-key")
+		os.Setenv("SUPABASE_TABLE", "user_profiles")
+		os.Setenv("SUPABASE_SCHEMA", "memfinance")
+
+		cfg, err := loadConfig()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if cfg.Schema != "memfinance" {
+			t.Errorf("expected schema 'memfinance', got: %s", cfg.Schema)
+		}
+		if cfg.Table != "user_profiles" {
+			t.Errorf("expected table 'user_profiles', got: %s", cfg.Table)
 		}
 	})
 
@@ -114,6 +158,7 @@ func TestPingSupabase(t *testing.T) {
 	var receivedRawQuery string
 	var receivedAPIKey string
 	var receivedAuth string
+	var receivedProfile string
 
 	// Buat mock server yang meniru Supabase PostgREST API
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -122,6 +167,7 @@ func TestPingSupabase(t *testing.T) {
 		receivedRawQuery = r.URL.RawQuery
 		receivedAPIKey = r.Header.Get("apikey")
 		receivedAuth = r.Header.Get("Authorization")
+		receivedProfile = r.Header.Get("Accept-Profile")
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -132,7 +178,8 @@ func TestPingSupabase(t *testing.T) {
 	cfg := &Config{
 		URL:      server.URL,
 		AnonKey:  "my-anon-key-123",
-		Table:    "users",
+		Schema:   "memfinance",
+		Table:    "user_profiles",
 		Interval: 72 * time.Hour,
 		Timeout:  5 * time.Second,
 	}
@@ -146,7 +193,7 @@ func TestPingSupabase(t *testing.T) {
 		t.Fatal("expected request to be received by mock server")
 	}
 
-	expectedPath := "/rest/v1/users"
+	expectedPath := "/rest/v1/user_profiles"
 	if receivedPath != expectedPath {
 		t.Errorf("expected path %s, got %s", expectedPath, receivedPath)
 	}
@@ -163,5 +210,9 @@ func TestPingSupabase(t *testing.T) {
 	expectedAuth := "Bearer " + cfg.AnonKey
 	if receivedAuth != expectedAuth {
 		t.Errorf("expected Authorization header '%s', got '%s'", expectedAuth, receivedAuth)
+	}
+
+	if receivedProfile != "memfinance" {
+		t.Errorf("expected Accept-Profile header 'memfinance', got '%s'", receivedProfile)
 	}
 }

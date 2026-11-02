@@ -18,6 +18,7 @@ import (
 type Config struct {
 	URL      string
 	AnonKey  string
+	Schema   string
 	Table    string
 	Interval time.Duration
 	Timeout  time.Duration
@@ -38,6 +39,14 @@ func loadConfig() (*Config, error) {
 	table := strings.TrimSpace(os.Getenv("SUPABASE_TABLE"))
 	if table == "" {
 		return nil, fmt.Errorf("environment variable SUPABASE_TABLE wajib diisi")
+	}
+
+	schema := strings.TrimSpace(os.Getenv("SUPABASE_SCHEMA"))
+	// Dukung format schema.table jika dimasukkan di SUPABASE_TABLE (contoh: memfinance.user_profiles)
+	if strings.Contains(table, ".") && schema == "" {
+		parts := strings.SplitN(table, ".", 2)
+		schema = parts[0]
+		table = parts[1]
 	}
 
 	// Default interval: 72 jam (3 hari) sesuai ketentuan
@@ -64,6 +73,7 @@ func loadConfig() (*Config, error) {
 	return &Config{
 		URL:      strings.TrimRight(supabaseURL, "/"),
 		AnonKey:  anonKey,
+		Schema:   schema,
 		Table:    table,
 		Interval: interval,
 		Timeout:  timeout,
@@ -88,6 +98,12 @@ func pingSupabase(ctx context.Context, client *http.Client, cfg *Config) {
 	req.Header.Set("Authorization", "Bearer "+cfg.AnonKey)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "Supabase-KeepAlive-Daemon/1.0")
+
+	// Header untuk schema kustom (jika bukan schema 'public')
+	if cfg.Schema != "" {
+		req.Header.Set("Accept-Profile", cfg.Schema)
+		req.Header.Set("Content-Profile", cfg.Schema)
+	}
 
 	startTime := time.Now()
 	resp, err := client.Do(req)
@@ -129,7 +145,11 @@ func main() {
 	}
 
 	log.Printf("[INFO] Target URL: %s", cfg.URL)
-	log.Printf("[INFO] Target Table: %s", cfg.Table)
+	if cfg.Schema != "" {
+		log.Printf("[INFO] Target Table: %s.%s (Schema: %s)", cfg.Schema, cfg.Table, cfg.Schema)
+	} else {
+		log.Printf("[INFO] Target Table: %s (Default Schema: public)", cfg.Table)
+	}
 	log.Printf("[INFO] Interval Ticker: %v (Next run in ~%v)", cfg.Interval, cfg.Interval)
 	log.Printf("[INFO] HTTP Request Timeout: %v", cfg.Timeout)
 
