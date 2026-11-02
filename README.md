@@ -38,7 +38,8 @@ It executes an initial ping immediately on boot, and then periodically queries y
 | :--- | :---: | :---: | :--- |
 | `SUPABASE_URL` | **Yes** | — | Supabase project URL (e.g., `https://xyzproject.supabase.co`) |
 | `SUPABASE_ANON_KEY` | **Yes** | — | Supabase public anonymous API key |
-| `SUPABASE_TABLE` | **Yes** | — | Table name to query (e.g., `users`, `profiles`) |
+| `SUPABASE_TABLE` | **Yes** | — | Table name (e.g., `users` or `memfinance.user_profiles`) |
+| `SUPABASE_SCHEMA` | No | `public` | Optional custom database schema (e.g., `memfinance`) |
 | `KEEP_ALIVE_INTERVAL` | No | `72h` | Ticker interval (e.g., `72h`, `24h`, `10s` for testing) |
 | `HTTP_TIMEOUT` | No | `30s` | Maximum HTTP request timeout |
 

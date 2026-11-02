@@ -1,4 +1,4 @@
-name: CI/CD
+name: CI
 
 on:
   push:
@@ -40,24 +40,3 @@ jobs:
 
       - name: Build Binary
         run: CGO_ENABLED=0 go build -ldflags="-w -s" -o csupa .
-
-  deploy:
-    name: Deploy to Dokploy
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - name: Trigger Dokploy Webhook
-        env:
-          DOKPLOY_WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_URL }}
-        run: |
-          if [ -z "$DOKPLOY_WEBHOOK_URL" ]; then
-            echo "::warning ::DOKPLOY_WEBHOOK_URL secret belum diset di GitHub Secrets. Melewati tahap deploy."
-            exit 0
-          fi
-          echo "Mengirim trigger deployment ke Dokploy..."
-          curl -s -S -X POST "$DOKPLOY_WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            --fail \
-            --show-error
-          echo "Deployment trigger berhasil dikirim ke Dokploy."
