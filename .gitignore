@@ -1,0 +1,16 @@
+# Binaries
+csupa
+supabase-keepalive
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, dependencies, coverage
+*.test
+*.out
+coverage.txt
+
+# Environment files
+.env
